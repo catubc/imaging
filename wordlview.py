@@ -1,0 +1,84 @@
+
+class WorldView(gl.GLViewWidget):
+    def __init__(self, parent=None):
+        global ShareWidget
+
+        if ShareWidget is None:
+            # create a dummy widget to allow sharing objects
+            # (textures, shaders, etc) between views
+            ShareWidget = QtOpenGL.QGLWidget()
+
+        QtOpenGL.QGLWidget.__init__(self, parent, ShareWidget)
+
+        self.setFocusPolicy(QtCore.Qt.ClickFocus)
+
+        self.opts = {
+            # will always appear at the center of the widget
+            'center': Vector(0, 0, 0),
+            # distance of camera from center
+            'distance': 10.0,
+            # horizontal field of view in degrees
+            'fov':  60,
+            # camera's angle of elevation in degrees
+            'elevation':  30,
+            # camera's azimuthal angle in degrees
+            # (rotation around z-axis 0 points along x-axis)
+            'azimuth': 45,
+            # glViewport params; None == whole widget
+            'viewport': None,
+        }
+        self.setBackgroundColor('k')
+        self.items = []
+        self.noRepeatKeys = [QtCore.Qt.Key_Right, QtCore.Qt.Key_Left,
+                             QtCore.Qt.Key_Up, QtCore.Qt.Key_Down,
+                             QtCore.Qt.Key_PageUp, QtCore.Qt.Key_PageDown]
+        self.keysPressed = {}
+        self.keyTimer = QtCore.QTimer()
+        self.keyTimer.timeout.connect(self.evalKeyState)
+
+        self.makeCurrent()
+
+        self.ray = QtGui.QVector3D(0, 0, 0)
+        self.select = False
+
+    def mousePressEvent(self, event):
+        print ("Pressed button", event.button(), "at", event.pos())
+
+        self.mousePos = event.pos()
+        if event.button() == 2:
+            self.select = True
+        else:
+            self.select = False
+        print (self.itemsAt((self.mousePos.x(), self.mousePos.y(), 3, 3)))
+
+
+#w = WorldView()
+__WIDTH = 512
+__HEIGHT = 424
+m = w.projectionMatrix() * w.viewMatrix()
+projected_array = np.zeros((__WIDTH * __HEIGHT, 2))
+view_w = w.width()
+view_h = w.height()
+mouse_x = w.mousePos.x()
+mouse_y = w.mousePos.y()
+# b array contains the raw coordinates of all the points on screen        
+for i in xrange(0, __WIDTH, step):
+    for j in xrange(0, __HEIGHT, step):
+        pt = m.map(QtGui.QVector3D(b[j*__WIDTH+i, 0],
+                                   b[j*__WIDTH+i, 1],
+                                   b[j*__WIDTH+i, 2]))
+        # origin range [-1, 1]
+        projected_array[j*__WIDTH+i, 0] = (pt.x() + 1)/2
+        projected_array[j*__WIDTH+i, 1] = (- pt.y() + 1)/2
+
+
+projected_array[:, 0] = (projected_array[:, 0] -
+                         (mouse_x/view_w))
+projected_array[:, 1] = (projected_array[:, 1] -
+                         (mouse_y/view_h))
+distance_array = np.power(np.power(projected_array[:, 0], 2) +
+                          np.power(projected_array[:, 1], 2), 0.5)
+
+min_index = np.nanargmin(distance_array)
+# mark the selected point on screen with a big sphere
+sp2.setData(pos=b[min_index, :], size=100)
