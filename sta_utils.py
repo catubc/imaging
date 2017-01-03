@@ -357,8 +357,10 @@ def Spike_averages_parallel_prespike_3sec_1D((args)):
 
     #sum_images = np.zeros((len(temp3[0]), temp_n_pixels, temp_n_pixels), dtype=np.float32)
     #vectors = np.zeros((len(temp3), 11665408), dtype=np.float32)
-    #vectors = np.zeros((len(temp3), 64, 11392), dtype=np.float32) #Later recordings sampling rates have 178 frames per 6 seconds
-    vectors = np.zeros((len(temp3), 64, 11520), dtype=np.float32) #older recordings
+    vectors = np.zeros((len(temp3), 64, 11392), dtype=np.float32) #Later recordings sampling rates have 178 frames per 6 seconds
+    #vectors = np.zeros((len(temp3), 64, 11520), dtype=np.float32) #older recordings
+    #vectors = np.zeros((len(temp3), 64, 19072), dtype=np.float32) #50Hz recs
+    
     for i in range(0, len(temp3), 1):
         baseline = np.average(images_temp[temp3[i][0:len(temp3[i])/2]], axis=0) 
         temp_img = images_temp[temp3[i]] #Remove avg of 1st half of images
@@ -412,11 +414,10 @@ def Compute_spike_triggered_average(unit, channel, all_spikes, window, img_rate,
     #Save only spikes that are within imaging window:
     filename_spikes = file_dir+file_name+'/unit_'+str(unit).zfill(2)+ '_channel_' + str(channel).zfill(2) + '*.csv'
     file_out = glob.glob(filename_spikes)[0]
-    np.savetxt(file_out[:-4]+"_imagingspikes.txt", all_spikes)       #Save only the spikes within imaging window
+    if os.path.exists(file_out[:-4]+"_imagingspikes.txt")==False: 
+        np.savetxt(file_out[:-4]+"_imagingspikes.txt", all_spikes)       #Save only the spikes within imaging window
+        #return [],[],[] 
     
-    
-    
-
     #all_spikes = True
     #plot_string = 'all'     #Trigger off all spkes
     #plot_string = '1sec'    #Trigger only on spikes with at least 0.5sec silence on both sides
@@ -431,8 +432,10 @@ def Compute_spike_triggered_average(unit, channel, all_spikes, window, img_rate,
         print "\n... processing stm_type: ", stm_type
         #Check to see if images already loaded and saved as .npy
         npy_file_name = file_dir + file_name + '/img_avg_' + file_name+ '_unit'+str(unit).zfill(2)+'_ch'+str(channel).zfill(2)+'_'+stm_type+'_'+str(window)+'sec_window_'+str(len(spikes)).zfill(5)+"_spikes"
+        stack_file_name = file_dir + file_name + '/stack1D_' + file_name+ '_unit'+str(unit).zfill(2)+'_ch'+str(channel).zfill(2)+'_'+stm_type+'_'+str(window)+'sec_window_'+str(len(spikes)).zfill(5)+"_spikes"
 
-        if (overwrite) or (os.path.exists(npy_file_name+'.npy')==False):
+        #if (overwrite) or (os.path.exists(npy_file_name+'.npy')==False):
+        if (overwrite) or (os.path.exists(stack_file_name+'.npy')==False):
         #if overwrite :
             images_temp = np.array(images_raw.copy(), dtype=np.float32)
 
@@ -525,8 +528,6 @@ def Compute_spike_triggered_average(unit, channel, all_spikes, window, img_rate,
                 print "... done... making 1D stack..."
                 stack_1D = vstack((images_triggered_temp))
                 print stack_1D.shape
-
-                stack_file_name = file_dir + file_name + '/stack1D_' + file_name+ '_unit'+str(unit).zfill(2)+'_ch'+str(channel).zfill(2)+'_'+stm_type+'_'+str(window)+'sec_window_'+str(len(spikes)).zfill(5)+"_spikes"
 
                 np.save(stack_file_name, stack_1D)
                 pool.close()
