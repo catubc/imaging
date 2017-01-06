@@ -9,8 +9,36 @@ from sklearn import *
 import glob
 import math
 from math import pi
+from sklearn import decomposition
+from sklearn import datasets
+from scipy import interpolate
+import scipy.cluster.hierarchy as sch
+from scipy.signal import butter, filtfilt, cheby1
+from pyqtgraph.Qt import QtCore, QtGui
+import pyqtgraph as pg
+import pyqtgraph.opengl as gl
 
 #*******************************
+global app, colours
+
+from pyqtgraph.Qt import QtCore, QtGui
+
+app = QtGui.QApplication([])    #Starts up the QtGui; makes gl object that needs to be passed to graph routines...
+
+      
+def butter_bandpass(lowcut, highcut, fs, order=5):
+    nyq = 0.5 * fs
+    low = lowcut / nyq
+    high = highcut / nyq
+    b, a = butter(order, [low, high], btype='band')
+    return b, a
+
+
+def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
+    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
+    y = filtfilt(b, a, data)
+    return y
+
 
 def dim_reduction(matrix_in, method, filename):
     
@@ -20,7 +48,7 @@ def dim_reduction(matrix_in, method, filename):
     
     if method==0:
         #MDS Method - SMACOF implementation Nelle Varoquaux
-        #if os.path.exists(filename+'_MDS.npy')==False:
+        if os.path.exists(filename+'_MDS_'+str(np.array(matrix_in).shape[1])+'D.npy')==False:
             
             array_1D = np.zeros((len(matrix_in), len(matrix_in[0].ravel())), dtype = np.float32)
             for k in range(len(matrix_in)):
@@ -39,13 +67,13 @@ def dim_reduction(matrix_in, method, filename):
             results = mds_clf.fit(adist)
             Y = results.embedding_ 
 
-            np.save(filename+'_MDS', Y)
-        #else:
-            Y = np.load(filename+'_MDS.npy')
+            np.save(filename+'_MDS_'+str(np.array(matrix_in).shape[1])+'D', Y)
+        else:
+            Y = np.load(filename+'_MDS_'+str(np.array(matrix_in).shape[1])+'D.npy')
                 
     elif method==1:
         ##t-Distributed Stochastic Neighbor Embedding; Laurens van der Maaten
-        #if os.path.exists(filename+'_tSNE.npy')==False:
+        if os.path.exists(filename+'_tSNE_'+str(np.array(matrix_in).shape[1])+'D.npy')==False:
             print "... tSNE ..."
             print "... pairwise dist ..."
             
@@ -65,14 +93,14 @@ def dim_reduction(matrix_in, method, filename):
             Y = model.fit_transform(adist)
             #Y = model.fit(adist)
         
-            np.save(filename+'_tSNE', Y)
+            np.save(filename+'_tSNE_'+str(np.array(matrix_in).shape[1])+'D', Y)
         
-        #else:
-        #    Y = np.load(filename+'_tSNE.npy')
+        else:
+            Y = np.load(filename+'_tSNE_'+str(np.array(matrix_in).shape[1])+'D.npy')
 
     elif method==2:
 
-        #if os.path.exists(filename+'_PCA.npy')==False:
+        if os.path.exists(filename+'_PCA_'+str(np.array(matrix_in).shape[1])+'D.npy')==False:
             print "...computing PCA..."
 
             array_1D = np.zeros((len(matrix_in), len(matrix_in[0].ravel())), dtype = np.float32)
@@ -82,14 +110,14 @@ def dim_reduction(matrix_in, method, filename):
 
             Y, X = PCA(matrix_in, 3)
 
-            np.save(filename+'_PCA', Y)
-        #else:
-            Y = np.load(filename+'_PCA.npy')
+            np.save(filename+'_PCA_'+str(np.array(matrix_in).shape[1])+'D', Y)
+        else:
+            Y = np.load(filename+'_PCA_'+str(np.array(matrix_in).shape[1])+'D.npy')
             
                 
     elif method==3:
 
-        #if os.path.exists(filename+'_tSNE_barnes_hut.npy')==False:
+        if os.path.exists(filename+'_tSNE_barnes_hut.npy')==False:
             print "... computing Barnes-Hut tSNE..."
             
             array_1D = np.zeros((len(matrix_in), len(matrix_in[0].ravel())), dtype = np.float32)
@@ -101,7 +129,7 @@ def dim_reduction(matrix_in, method, filename):
             Y = bh_sne(np.array(matrix_in))
         
             np.save(filename+'_tSNE_barnes_hut', Y)
-        #else:
+        else:
             Y = np.load(filename+'_tSNE_barnes_hut.npy')
 
     return Y
@@ -118,7 +146,7 @@ def PCA(X, n_components):
     for i in range(len(X)):
          coords.append([X[i][0], X[i][1], X[i][2]])
     
-    return X, np.array(coords).T #THIS IS REDUNDANT... REDUCE IT
+    return X
 
 def KMEANS(data, n_clusters):
 
@@ -305,8 +333,9 @@ def plot_data(data, colours, original_image, methods, method, n_clusters, labels
 
 
     print file_name
+    filename= file_name
     path, file_name = os.path.split(file_name) 
-    if True:
+    if False:
         #***************************************************************************
         #PLot rasters
         ax = plt.subplot(111)
@@ -342,8 +371,8 @@ def plot_data(data, colours, original_image, methods, method, n_clusters, labels
         #*****************************************************************************
         #Plot ISI histograms
         for k in range(n_clusters):
-            #ax = plt.subplot(1,n_clusters,k+1)
-            ax = plt.subplot(2,2,k+1)
+            ax = plt.subplot(1,n_clusters,k+1)
+            #ax = plt.subplot(2,2,k+1)
             ax.yaxis.set_ticks([])
             indexes = np.where(labels==k)[0]
             temp_raster = spikes[indexes]
@@ -369,38 +398,38 @@ def plot_data(data, colours, original_image, methods, method, n_clusters, labels
         plt.ylim(0,np.max(y[0]))
         plt.show()
         
-        #*************************************************************************************
-        #Plot partitioned rasters
-        ymin = np.zeros(len(labels),dtype=np.float32)-labels*5
-        ymax = np.zeros(len(labels),dtype=np.float32)-(labels+1)*5+1
-        print len(spikes), len(labels)
+        ##*************************************************************************************
+        ##Plot partitioned rasters
+        #ymin = np.zeros(len(labels),dtype=np.float32)-labels*5
+        #ymax = np.zeros(len(labels),dtype=np.float32)-(labels+1)*5+1
+        #print len(spikes), len(labels)
         
-        spikes = spikes[:len(labels)]   #Trim the last few spikes that weren't computed in the STM routine due to parallelization round off
-        colors_out = []
-        for k in range(len(labels)):
-            colors_out.append(colours[labels[k]])
-        plt.vlines(spikes, ymin, ymax, color=colors_out, linewidth=1, alpha=0.5)
+        #spikes = spikes[:len(labels)]   #Trim the last few spikes that weren't computed in the STM routine due to parallelization round off
+        #colors_out = []
+        #for k in range(len(labels)):
+            #colors_out.append(colours[labels[k]])
+        #plt.vlines(spikes, ymin, ymax, color=colors_out, linewidth=1, alpha=0.5)
         
-        #Plot original rasters
-        offset=np.max(labels)+1
-        ax.yaxis.set_ticks([])
+        ##Plot original rasters
+        #offset=np.max(labels)+1
+        #ax.yaxis.set_ticks([])
 
-        ymin = np.zeros(len(labels),dtype=np.float32)-offset*5
-        ymax = np.zeros(len(labels),dtype=np.float32)-(offset+1)*5+1
-        plt.vlines(spikes, ymin, ymax, color='black', linewidth=1, alpha=0.5)
+        #ymin = np.zeros(len(labels),dtype=np.float32)-offset*5
+        #ymax = np.zeros(len(labels),dtype=np.float32)-(offset+1)*5+1
+        #plt.vlines(spikes, ymin, ymax, color='black', linewidth=1, alpha=0.5)
 
-        plt.xlabel("Time (sec)", fontsize = 30)
-        plt.ylabel("All Spikes  Sub Groups", fontsize =30)
-        plt.tick_params(axis='both', which='both', labelsize=30)
-        plt.xlim(0, np.max(spikes)+5)
-        plt.suptitle("Partitioned Rasters", fontsize=30)
-        plt.show()
+        #plt.xlabel("Time (sec)", fontsize = 30)
+        #plt.ylabel("All Spikes  Sub Groups", fontsize =30)
+        #plt.tick_params(axis='both', which='both', labelsize=30)
+        #plt.xlim(0, np.max(spikes)+5)
+        #plt.suptitle("Partitioned Rasters", fontsize=30)
+        #plt.show()
         
         
         
         #******************************************************************************
         #Plot Scatter Distributions
-        if True: 
+        if False: 
             fig = plt.figure()
             ax = fig.add_subplot(111)
 
@@ -410,11 +439,20 @@ def plot_data(data, colours, original_image, methods, method, n_clusters, labels
             plt.show()
             
 
-        if False: 
+        if True: 
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
 
-            for k in range(len(data)): 
+            #data_temp = data
+            #data_pos = []; data_neg=[]
+            #for k in range(3):
+                #data_pos.append(np.exp(np.clip(data_temp.T[k], 0, 100)))
+                #data_neg.append(np.exp(-np.clip(data_temp.T[k],-100,0)))
+
+            #data_temp = np.vstack(data_pos)-np.vstack(data_neg)
+            #data_temp=data_temp.T
+            
+            for k in range(0,len(data),1): 
                 ax.scatter(data[k][0], data[k][1], data[k][2], c=colours[labels[k]], marker='o')
 
             ax.set_xlabel('X Label')
@@ -488,10 +526,12 @@ def plot_data(data, colours, original_image, methods, method, n_clusters, labels
     #****************************************************************************
     #Track max val location at specific ROI
     depth = 'cortex'
-    areas = ['motor', 'retrosplenial', 'barrel']
+    areas = ['barrel', 'motor', 'retrosplenial']
     side = 'left'
 
-    if False: 
+    #Generate single spike STMTDs for specific regions
+    if os.path.exists(path+'/unit_'+str(unit).zfill(2)+"_"+areas[0]+"_stmtd.npy")==False:
+
         for area in areas: 
             mask_file = path + '/' + depth + "_" + area + "_" + side       #Load ROI Mask
             temp_data = np.load(mask_file+'.npy')
@@ -503,15 +543,78 @@ def plot_data(data, colours, original_image, methods, method, n_clusters, labels
             #********************
             #Plot motifs
             overall_max = []
-            print "... plotting ..."
-            for k in range(n_clusters):
-                print "...cluster: ", k
-                #ax=plt.subplot(n_clusters+1,1,k+1)
-                ax=plt.subplot(1,1,1)
+
+            #for k in range(n_clusters):
+                #print "...cluster: ", k
+                ##ax=plt.subplot(n_clusters+1,1,k+1)
+                #ax=plt.subplot(1,1,1)
+                
+                ##Select clustered motifs only
+                #indexes = np.where(labels==k)[0]
+            
+            trace_max_array = []
+            for s in range(len(original_image)):
+                print "... processing ", area, " ", side, "  spike: ", s
+                #temp_ave = np.mean(original_image[indexes], axis=0)
+                temp_ave = original_image[s] #Do individual spike plots.
+
+                
+                #Convert back to multi-frame stack
+                img_stack = []
+                for p in range(temp_ave.shape[1]/64):
+                    img_stack.append(temp_ave[:,p*64:(p+1)*64])
+                
+                img_stack = np.array(img_stack)
+
+                if True: #Max pixel tracking
+                    #Find location of max value - within ROI; NB: THIS MAY NOT ALWAYS WORK!!!
+                    max_loc = []; max_val = []
+                    for p in range(len(img_stack)):
+                        temp_max = np.argmax(np.abs(img_stack[p].ravel()[mask_indexes])) #Find the abs_max value in each ROI chosen
+                        max_loc.append(temp_max)
+                        max_val.append(img_stack[p].ravel()[mask_indexes][temp_max])
+                    
+                    max_val_argument = np.argmax(np.abs(max_val))
+                    max_val = max_val[max_val_argument]*1E2
+                    max_loc = max_loc[max_val_argument]
+
+                    #print "...max locations: ", max_loc, " max_val: ", max_val
+                    overall_max.append(max_val)
+
+                    #Track max/min value across all frames
+                    trace_max = []
+                    for p in range(img_stack.shape[0]):                     #Loop over all frames
+                        trace_max.append(img_stack[p].ravel()[mask_indexes][max_loc])
+                        
+                    trace_max = np.array(trace_max)*1E2
+
+                else:
+                    #Track max/min value across all frames
+                    trace_max = []
+                    for p in range(img_stack.shape[0]):                     #Loop over all frames
+                        trace_max.append(np.mean(img_stack[p].ravel()[mask_indexes],axis=0))
+                    
+                    overall_max.append(np.max(trace_max))
+
+
+                    trace_max = np.array(trace_max)*1E2
+
+                if False: plt.plot(trace_max, color=colours[k], linewidth=3)
+                
+                #np.savetxt(path+'/'+str(unit).zfill(2)+"_"+area+"_cluster"+str(k), trace_max)
+                #np.save(path+'/'+str(unit).zfill(2)+"_"+area+"_spike"+str(s), trace_max)
+            
+                trace_max_array.append(trace_max)
+            np.save(path+'/unit_'+str(unit).zfill(2)+"_"+area+"_stmtd", trace_max_array)
+
+
+            #********************
+            if False:   #View the STMTDs for each area/region - NOT USED
+                #Plot motifs
+                print "... plotting ..."
                 
                 #Select clustered motifs only
-                indexes = np.where(labels==k)[0]
-                temp_ave = np.mean(original_image[indexes], axis=0)
+                temp_ave = np.mean(original_image, axis=0)
 
                 #Convert back to multi-frame stack
                 img_stack = []
@@ -521,7 +624,7 @@ def plot_data(data, colours, original_image, methods, method, n_clusters, labels
                 img_stack = np.array(img_stack)
                 print img_stack.shape
 
-                #Find location of max value - within ROI; NB: THIS MAY NOT ALWAYS WORK!!!
+                #Find location of max value - within ROI CHOSEN ABOVE
                 max_loc = []; max_val = []
                 for p in range(len(img_stack)):
                     temp_max = np.argmax(np.abs(img_stack[p].ravel()[mask_indexes])) #Find the abs_max value in each ROI chosen
@@ -531,81 +634,102 @@ def plot_data(data, colours, original_image, methods, method, n_clusters, labels
                 max_val_argument = np.argmax(np.abs(max_val))
                 max_val = max_val[max_val_argument]*1E2
                 max_loc = max_loc[max_val_argument]
-
+                
                 print "...max locations: ", max_loc, " max_val: ", max_val
-                overall_max.append(max_val)
 
                 #Track max/min value across all frames
                 trace_max = []
                 for p in range(img_stack.shape[0]):                     #Loop over all frames
                     trace_max.append(img_stack[p].ravel()[mask_indexes][max_loc])
                 trace_max = np.array(trace_max)*1E2
-
-                plt.plot(trace_max, color=colours[k], linewidth=3)
-                
-                np.savetxt(path+'/'+str(unit).zfill(2)+"_"+area+"_cluster"+str(k), trace_max)
-            
-            #********************
-            #Plot motifs
-            print "... plotting ..."
-            
-            #Select clustered motifs only
-            temp_ave = np.mean(original_image, axis=0)
-
-            #Convert back to multi-frame stack
-            img_stack = []
-            for p in range(temp_ave.shape[1]/64):
-                img_stack.append(temp_ave[:,p*64:(p+1)*64])
-            
-            img_stack = np.array(img_stack)
-            print img_stack.shape
-
-            #Find location of max value - within ROI CHOSEN ABOVE
-            max_loc = []; max_val = []
-            for p in range(len(img_stack)):
-                temp_max = np.argmax(np.abs(img_stack[p].ravel()[mask_indexes])) #Find the abs_max value in each ROI chosen
-                max_loc.append(temp_max)
-                max_val.append(img_stack[p].ravel()[mask_indexes][temp_max])
-            
-            max_val_argument = np.argmax(np.abs(max_val))
-            max_val = max_val[max_val_argument]*1E2
-            max_loc = max_loc[max_val_argument]
-            
-            print "...max locations: ", max_loc, " max_val: ", max_val
-
-            #Track max/min value across all frames
-            trace_max = []
-            for p in range(img_stack.shape[0]):                     #Loop over all frames
-                trace_max.append(img_stack[p].ravel()[mask_indexes][max_loc])
-            trace_max = np.array(trace_max)*1E2
+                        
+                plt.plot(trace_max, color='black', linewidth=3)
                     
-            plt.plot(trace_max, color='black', linewidth=3)
+                np.savetxt(path+'/'+str(unit).zfill(2)+"_"+area+"_allspikes"+str(k), trace_max)
+
+
+                plt.plot([0,180],[0,0], 'r--', color='black', linewidth=3, alpha=0.5)
+                plt.plot([90,90],[-10,10], 'r--', color='black', linewidth=3, alpha=0.5)
                 
-            np.savetxt(path+'/'+str(unit).zfill(2)+"_"+area+"_allspikes"+str(k), trace_max)
+                plt.ylim(int(-np.max(np.abs(overall_max))-1),int(np.max(np.abs(overall_max))+1))
+                plt.xlim(0,180)
+
+                plt.ylabel("DF/F (%)", fontsize=30)
+                
+                plt.title("STMTD for Left-"+area+" Cortex", fontsize = 30)
+                plt.xlabel("Time (sec)", fontsize=30)
+
+                old_xlabel = np.arange(0, len(trace_max)+3,30)
+                new_xlabel = np.arange(-3.0,3.1, 1)
+                plt.xticks(old_xlabel, new_xlabel, fontsize=30)    
+
+                plt.tick_params(axis='both', which='both', labelsize=30)
+
+                plt.show()
+                
+    #If STMTDs for 3 regions computed already, view/process them.
+    else: 
+
+        samplerate = 30 #30Hz samplerate
+        low_cutoff = 0.1; high_cutoff = 6
+        
+        pca_arrays = []
+        for ctr, area in enumerate(areas): 
+            #pca_arrays.append([])
+
+            traces = np.load(path+'/unit_'+str(unit).zfill(2)+"_"+area+"_stmtd.npy")
+            for s in range(len(traces)):
+                
+                trace = butter_bandpass_filter(traces[s], low_cutoff, high_cutoff, fs=samplerate, order = 2)
+                #plt.plot(trace, color = 'black', alpha=.2)
+                
+                #print np.max(np.abs(trace[len(trace)/2:len(trace)/2+12]))
+                #pca_arrays[ctr].append(np.max(np.abs(trace[len(trace)/2-9:len(trace)/2])))
+                #pca_arrays[ctr].append(trace[len(trace)/2:len(trace)/2]+6)
+                if ctr!=0: pca_arrays.append(trace[len(trace)/2:len(trace)/2]+6)
+                else: pca_arrays[s].extend(trace[len(trace)/2:len(trace)/2]+6)
+                
+        data = np.array(pca_arrays).T
+        print "...stacked data: ", data.shape
 
 
-            plt.plot([0,180],[0,0], 'r--', color='black', linewidth=3, alpha=0.5)
-            plt.plot([90,90],[-10,10], 'r--', color='black', linewidth=3, alpha=0.5)
+        #data = PCA(data, 3);         data=np.array(data)
+        #matrix_in = data; method = 1
+        #data = dim_reduction(matrix_in, method, filename+"_manual")
+
+
+        if False:
+            plot_pyqt(data)
+
+            #fig = plt.figure()
+            #ax = fig.add_subplot(111, projection='3d')
+
+            #for k in range(0,len(data),1): 
+                ##ax.scatter(data[k][0], data[k][1], data[k][2], c=colours[labels[k]], marker='o')
+                #ax.scatter(data[k][0], data[k][1], data[k][2], marker='o')
+
+            #ax.scatter(np.mean(data[:][0]), np.mean(data[:][1]), np.mean(data[:][2]), marker='o', s=300, color = 'r')
+
+
+            #ax.set_xlabel('X Label')
+            #ax.set_ylabel('Y Label')
+            #ax.set_zlabel('Z Label')
+
+            #plt.show()
+        
+        if True: 
+            import sklearn.metrics.pairwise
+            import scipy.spatial.distance
+
+            data = sklearn.metrics.pairwise.euclidean_distances(data)
             
-            plt.ylim(int(-np.max(np.abs(overall_max))-1),int(np.max(np.abs(overall_max))+1))
-            plt.xlim(0,180)
-
-            plt.ylabel("DF/F (%)", fontsize=30)
-            
-            plt.title("STMTD for Left-"+area+" Cortex", fontsize = 30)
-            plt.xlabel("Time (sec)", fontsize=30)
-
-            old_xlabel = np.arange(0, len(trace_max)+3,30)
-            new_xlabel = np.arange(-3.0,3.1, 1)
-            plt.xticks(old_xlabel, new_xlabel, fontsize=30)    
-
-            plt.tick_params(axis='both', which='both', labelsize=30)
-
-
+            bin_width = 0.1   # histogram bin width in usec
+            y = np.histogram(data, bins = np.arange(-5,20,bin_width))
+            plt.bar(y[1][:-1], y[0], bin_width, color='blue')      
+            plt.title(filename)      
             plt.show()
-                
 
-    #********************************************************************
+    ##********************************************************************
     #Plot 3D trace DF/F distributions
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
@@ -613,7 +737,7 @@ def plot_data(data, colours, original_image, methods, method, n_clusters, labels
     all_data = True
 
     #Plot partitioned dynamics
-    for k in range(4):
+    for k in range(n_clusters):
         temp_traces = []
         for area in areas: 
             temp_traces.append(np.loadtxt(path+'/'+str(unit).zfill(2)+"_"+area+"_cluster"+str(k)))
@@ -658,13 +782,56 @@ def plot_data(data, colours, original_image, methods, method, n_clusters, labels
     #ax.tick_params(axis='y', pad=-10)
     #ax.tick_params(axis='z', pad=-10)
 
-
     plt.show()
-            
 
 
-def partition_data_roi(base_filename, cells, methods, methods_array, colours, area_names, sides, mid_line_mask, block, crop_method, unit, n_clusters):
+def plot_pyqt(coords):
     
+    w = gl.GLViewWidget()
+    w.setBackgroundColor('w')
+
+    w.opts['distance'] = 20
+    w.show()
+    w.setWindowTitle('pyqtgraph example: GLScatterPlotItem')
+
+    g = gl.GLGridItem(color='b')
+    w.addItem(g)
+
+    pos = []
+    
+    size = []
+    color = []
+    for i in range(len(coords)):
+        if coords.shape[1] == 3:         pos.append([coords[i][0], coords[i][1], coords[i][2]])
+        else:        pos.append([coords[i][0], coords[i][1], 0])
+
+        size.append(.1)
+        color.append([0,255,0])  #May wish to randomize color loading
+
+    #Add mean value:
+    pos.append([np.mean(coords[:][0]), np.mean(coords[:][1]), np.mean(coords[:][2])])
+    size.append(.5)
+    color.append([255,0,0])
+
+    pos = np.array(pos)
+    size = np.array(size)
+    color = np.array(color)
+    
+    sp1 = gl.GLScatterPlotItem(pos=pos, size=size, color=color, pxMode=False)
+    #sp1 = gl.GLVolumeItem(pos, sliceDensity=1, smooth=True, glOptions='translucent')
+    sp1.setGLOptions('opaque')
+    w.addItem(sp1)
+
+
+    ## Start Qt event loop unless running in interactive mode.
+    QtGui.QApplication.instance().exec_()
+    app.closeAllWindows()
+        
+
+
+def track_roi_cell(base_filename, cells, methods, methods_array, colours, area_names, sides, mid_line_mask, block, crop_method, unit, n_clusters, trace_mode):
+    
+
     c = unit
     print "... processing cell: ", c
 
@@ -675,9 +842,219 @@ def partition_data_roi(base_filename, cells, methods, methods_array, colours, ar
 
     filename = filename[0]
     
+    
+    dir_path, file_name = os.path.split(filename) 
+
+    if os.path.exists(dir_path+'/'+str(unit).zfill(2)+"_alltraces_"+trace_mode+".npy")==True: return
+
+    original_stack = np.load(filename, mmap_mode='c')
+    print original_stack.shape
+
+    
+    #Track max val location at specific ROI
+    depth = 'cortex'
+    areas = ['motor', 'retrosplenial', 'barrel']
+    side = 'left'
+
+    mask_indexes=[]
+    for area in areas: 
+        mask_file = dir_path + '/' + depth + "_" + area + "_" + side       #Load ROI Mask
+        temp_data = np.load(mask_file+'.npy')
+        mask_stack_ravel = temp_data.ravel()
+
+        mask_indexes.append(np.where(mask_stack_ravel==0)[0])      #Pick only values not masked, i.e. mask = False
+
+    all_trace_stack = []
+    for k in range(len(original_stack)):
+        print "...spike: ", k
+
+        cell_trace_stack = []
+        for mask_index in mask_indexes: 
+            
+            #Select clustered motifs only
+            temp_ave = original_stack[k]
+
+            #Convert back to multi-frame stack
+            img_stack = []
+            for p in range(temp_ave.shape[1]/64):
+                img_stack.append(temp_ave[:,p*64:(p+1)*64])
+            
+            img_stack = np.array(img_stack)
+
+            if trace_mode=='max': #Max pixel tracking
+                #Find location of max value - within ROI; NB: THIS MAY NOT ALWAYS WORK!!!
+                max_loc = []; max_val = []
+                for p in range(len(img_stack)):
+                    temp_max = np.argmax(np.abs(img_stack[p].ravel()[mask_index])) #Find the abs_max value in each ROI chosen
+                    max_loc.append(temp_max)
+                    max_val.append(img_stack[p].ravel()[mask_index][temp_max])
+                
+                max_val_argument = np.argmax(np.abs(max_val))
+                max_val = max_val[max_val_argument]*1E2
+                max_loc = max_loc[max_val_argument]
+
+                #print "...max locations: ", max_loc, " max_val: ", max_val
+                #overall_max.append(max_val)
+
+                #Track max/min value across all frames
+                trace_max = []
+                for p in range(img_stack.shape[0]):                     #Loop over all frames
+                    trace_max.append(img_stack[p].ravel()[mask_index][max_loc])
+                    
+                trace_max = np.array(trace_max)
+
+            if trace_mode=='ave': #Ave ROI tracking
+                trace_max = []
+                for p in range(img_stack.shape[0]):                     #Loop over all frames
+                    trace_max.append(np.mean(img_stack[p].ravel()[mask_index],axis=0))
+
+                trace_max = np.array(trace_max)
+            
+            cell_trace_stack.append(trace_max)
+        
+        all_trace_stack.append(cell_trace_stack)
+    
+    all_trace_stack = np.array(all_trace_stack)
+    print all_trace_stack.shape
+    
+    np.save(dir_path+'/'+str(unit).zfill(2)+"_alltraces_"+trace_mode, all_trace_stack)
+    
+def hierarchical_clustering(base_filename, cells, methods, methods_array, colours, area_names, sides, mid_line_mask, block, crop_method, unit, n_clusters, trace_mode):
+
+    print "...computing hierarchical clustering..."
+
+    dir_path, file_name = os.path.split(filename) 
+
+
+    #Load tracked ROI data
+    data = np.load(dir_path+'/'+str(unit).zfill(2)+"_alltraces_"+trace_mode+".npy")
+
+    if data.shape[2]>180: 
+        print "....data acquisition > 30Hz..."
+        return
+
+    #Select only -1..+1sec periods
+    data_in = []
+    for k in range(len(data)): #Loop over each spike
+        temp_array = []
+        for p in range(len(data[k])):
+            temp_array.append(data[k][p][60:120])   #This only works with 30Hz data
+        
+        data_in.append(np.hstack(temp_array))
+
+        
+    #*******Plot correlation matrix
+    correlation_file = dir_path+'/'+str(unit).zfill(2)+"_correlation.npz"
+    
+    if os.path.exists(correlation_file)==False: 
+        D_cortex = np.corrcoef(data_in)
+        Y = sch.linkage(D_cortex, method='centroid')
+        Z1_cortex = sch.dendrogram(Y, orientation='bottom')
+        Y = sch.linkage(D_cortex, method='single')
+        Z2_cortex = sch.dendrogram(Y)
+
+        #Cortex plot
+        idx1 = Z1_cortex['leaves']
+        idx2 = Z2_cortex['leaves']
+        D = D_cortex[idx1,:]
+        D = D[:,idx2]
+        
+        np.savez(correlation_file[:-4], D=D, D_cortex=D_cortex, idx1=idx1, idx2=idx2)
+
+    else:
+        data = np.load(correlation_file)
+    
+        D = data['D']
+        D_cortex = data["D_cortex"]
+        idx1 = data['idx1']
+        idx2 = data['idx2']
+        
+    ax = plt.subplot(111)
+    im = ax.matshow(D, origin='lower',interpolation='none', cmap=plt.get_cmap('jet'))
+    #plt.title(depth_match + " " + state_match + "\n(in cluster order)")
+    #axmatrix.set_xticks(idx2)
+    #axmatrix.set_yticks(idx1)
+
+    plt.show()
+
+    xx = np.linspace(0,len(D_cortex)-1,len(D_cortex))
+    label_idx2 = []
+    for k in range(len(idx2)):
+        label_idx2.append(str(area_names[idx2[k]][0:1]))
+    label_idx1 = []
+    for k in range(len(idx1)):
+        label_idx1.append(str(area_names[idx1[k]][0:1]))        
+    
+    plt.xticks(xx, label_idx2)
+    plt.xticks(rotation=90)
+    plt.yticks(xx, label_idx1)
+
+    plt.ylim(-.5,-.5+len(D_cortex))
+    plt.xlim(-.5,-.5+len(D_cortex))
+        
+    plt.show()
+
+    
+    #***** Plot average total matrix
+    ax = plt.subplot(6,6,31)
+    img_avg = np.average(np.array(img_ave), axis=0)
+    
+    D_cortex = np.corrcoef(img_avg)
+    Y = sch.linkage(D_cortex, method='centroid')
+    Z1_cortex = sch.dendrogram(Y, orientation='bottom')
+    Y = sch.linkage(D_cortex, method='single')
+    Z2_cortex = sch.dendrogram(Y)
+
+    #Cortex plot
+    idx1 = Z1_cortex['leaves']
+    idx2 = Z2_cortex['leaves']
+    D = D_cortex[idx1,:]
+    D = D[:,idx2]
+    im = ax.imshow(D, origin='lower',interpolation='none', cmap=plt.get_cmap('jet'))
+    #plt.title(depth_match + " " + state_match + "\n(in cluster order)")
+    #axmatrix.set_xticks(idx2)
+    #axmatrix.set_yticks(idx1)
+
+    xx = np.linspace(0,len(D_cortex)-1,len(D_cortex))
+    label_idx2 = []
+    for k in range(len(idx2)):
+        label_idx2.append(str(area_names[idx2[k]][0:1]))
+    label_idx1 = []
+    for k in range(len(idx1)):
+        label_idx1.append(str(area_names[idx1[k]][0:1]))        
+    
+    plt.xticks(xx, label_idx2)
+    plt.xticks(rotation=90)
+    plt.yticks(xx, label_idx1)
+
+    plt.ylim(-.5,-.5+len(D_cortex))
+    plt.xlim(-.5,-.5+len(D_cortex))
+
+    plt.show()
+
+
+
+def partition_data_roi(base_filename, cells, methods, methods_array, colours, area_names, sides, mid_line_mask, block, crop_method, unit, n_clusters, global_signal_regression):
+    
+    c = unit
+    print "... processing cell: ", c
+
+    if global_signal_regression==False: 
+        filename = glob.glob(base_filename+str(c).zfill(2)+"*spikes.npy")
+    else: 
+        filename = glob.glob(base_filename+str(c).zfill(2)+"*spikes_globalsignalregression.npy")
+
+
+    if len(filename)!=1: 
+        print "...skipping cell: "
+        return
+
+    filename = filename[0]
+    
     img_stack = np.load(filename, mmap_mode='c')
     print img_stack.shape
         
+    
     #************************************************************************    
     #Plot example motifs
     motifs = [1]
@@ -879,7 +1256,7 @@ def partition_data(base_filename, cells, methods, methods_array, colors):
                 
 #********************************
 
-colours = ['green','red','blue', 'magenta','purple','orange','cyan','pink','grey', 'orange']
+colours = ['green','red','blue', 'magenta','purple','orange','cyan','pink','grey', 'orange','green','red','blue', 'magenta','purple','orange','cyan','pink','grey', 'orange','green','red','blue', 'magenta','purple','orange','cyan','pink','grey', 'orange']
 
 plotting = True
 
@@ -906,26 +1283,29 @@ area_names = ['barrel', 'retrosplenial', 'motor']
 sides = ['left']#,'right']
 crop_method = 'ave'  #,['max','ave']
 
+global_signal_regression = False
+
+trace_mode = 'ave'
 
 mid_line_mask = 2
 block = 10 #30Hz recs
 #block = 15 #50Hz recs
 
-n_clusters = 4
+n_clusters = 15
         
 cells = np.arange(0,100,1)
 #unit = 1 #7-22-2
 #unit = 16 #7-22-5
-#unit = 4 #12-2; cells: 7, 12, 8, 9, 13, 4, 5
+#unit = 4 #12-2-6; cells: 7, 12, 8, 9, 13, 4, 5
 #unit = 2 #11-8-9
 #unit = 12 #11-27-5
-unit = 33 #2015-12-215
+unit = 33 #2015-12-15
 #unit = 65 #12-2-12
 #unit = 2 #12-11-12
 
 methods = ['MDS - SMACOF', 't-SNE', 'PCA', 'tSNE-Barnes_hut']
 methods_array = np.arange(0,3,1)
-methods_array = [2]
+methods_array = [1]
 
 
 temp_name = glob.glob(base_filename+str(unit).zfill(2)+"*spikes.npy")
@@ -937,11 +1317,11 @@ Define_cortical_areas(filename)
 
 #partition_data(base_filename, cells, methods, methods_array, colors)
 
+partition_data_roi(base_filename, cells, methods, methods_array, colours, area_names, sides, mid_line_mask, block, crop_method, unit, n_clusters, global_signal_regression)
 
-partition_data_roi(base_filename, cells, methods, methods_array, colours, area_names, sides, mid_line_mask, block, crop_method, unit, n_clusters)
+track_roi_cell(base_filename, cells, methods, methods_array, colours, area_names, sides, mid_line_mask, block, crop_method, unit, n_clusters, trace_mode)
 
-
-
+hierarchical_clustering(base_filename, cells, methods, methods_array, colours, area_names, sides, mid_line_mask, block, crop_method, unit, n_clusters, trace_mode)
 
 quit()
 

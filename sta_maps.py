@@ -122,12 +122,12 @@ file_names = []
 #])
 
 
-#file_dirs.append('/media/cat/8TB/in_vivo/tim/dongsheng/2015-11-27/') #*************************************
-#file_names.append([
+file_dirs.append('/media/cat/8TB/in_vivo/tim/dongsheng/2015-11-27/') #*************************************
+file_names.append([
 #'2015-11-27-1-10electrodein-iso1.0',
 #'2015-11-27-2-10electrodein-iso1', 
 #'2015-11-27-4-10electrodein-iso0', 
-#'2015-11-27-5-10electrodein-iso0',
+'2015-11-27-5-10electrodein-iso0',
 #'2015-11-27-7-16electrodein-iso1',
 #'2015-11-27-8-16electrodein-iso1',
 #'2015-11-27-10-16electrodein-iso0',
@@ -146,7 +146,7 @@ file_names = []
 ###'2015-11-27-5-10electrodein-iso0_lfp',
 ###'2015-11-27-14-deep-iso1_lfp',
 ###'2015-11-27-16-deep-iso0_lfp'
-#])
+])
 
 #file_dirs.append('/media/cat/8TB/in_vivo/tim/dongsheng/2015-12-1/') #*************************************
 #file_names.append([
@@ -203,8 +203,8 @@ file_names = []
 #'2015-12-2-14-allelectrodeinthalamus-is0_lfp'
 #])
 
-file_dirs.append('/media/cat/8TB/in_vivo/tim/dongsheng/2015-12-11/') #*************************************
-file_names.append([
+#file_dirs.append('/media/cat/8TB/in_vivo/tim/dongsheng/2015-12-11/') #*************************************
+#file_names.append([
 #'2015-12-11-1-10electincortex-iso1.0',
 #'2015-12-11-2-10electincortex-iso1',
 #'2015-12-11-3-10electincortex-iso1',
@@ -214,7 +214,7 @@ file_names.append([
 #'2015-12-11-9-allelectincortex',
 #'2015-12-11-10-5electinthalamusorcpu',
 #'2015-12-11-11-allelectinthalamus-iso1',
-'2015-12-11-12-allelectinthalamus-iso1',
+#'2015-12-11-12-allelectinthalamus-iso1',
 #'2015-12-11-13-allelectinthalamus-iso1',
 #'2015-12-11-15-allelectinthalamus-iso0',
 #'2015-12-11-16-allelectinthalamus-iso0',
@@ -230,7 +230,7 @@ file_names.append([
 #'2015-12-11-5-10electincortex-iso0_lfp',
 ##'2015-12-11-12-allelectinthalamus-iso1_lfp',
 #'2015-12-11-16-allelectinthalamus-iso0_lfp',
-])
+#])
 
 #file_dirs.append('/media/cat/8TB/in_vivo/tim/dongsheng/2015-12-16/') #*************************************
 #file_names.append([
@@ -300,7 +300,7 @@ stm_types = ["all"]  # ["all", "burst", "1sec"]    #Do "all" last to ensure that
 
 #STA maps - False units
 sta_maps = True
-overwrite = False                   #Compute stimulus maps 
+overwrite = True                   #Compute stimulus maps 
 overwrite_time_courses = False      #Flag to bipass existing img_avg generation and just compute time courses
 overwrite_shifted=False             #Flag for overwriting rotated/shifted .npy image files
 
@@ -481,7 +481,7 @@ for file_dir in file_dirs:
                 ptp=ptps[i]
                 
                 #PICK A SINGLE UNIT TO LOOK AT
-                if unit not in [2]: continue
+                if unit not in [12]: continue
                 
                 #*********** Load sorted spikes for unit
                 spikes = np.loadtxt(file_dir+file_name+'/unit_'+str(unit).zfill(2)+ '_channel_' + str(channel).zfill(2) + '_ptp_'+str(ptp).zfill(3)+'.csv')

@@ -380,6 +380,27 @@ def Spike_averages_parallel_prespike_3sec_1D((args)):
     return vectors
 
 
+
+def Spike_averages_parallel_globalsignalregression_1D((args)):
+    global images_temp, temp_n_pixels
+
+    temp3 = args
+
+    vectors = []
+    for i in range(len(temp3)): 
+        temp_img = images_temp[temp3[i]] #select the image stack around     #temp3 already contains a stack of 178-180 frames centred on spike
+        
+        temp_stack = np.ma.hstack(temp_img)
+        indexes_nan = np.isnan(temp_stack)
+        temp_stack[indexes_nan]=0
+
+        vectors.append(scipy.ndimage.interpolation.zoom(temp_stack,.25))
+    
+    return vectors
+
+
+
+
 def Spike_averages_parallel((args)):
     global images_temp
     temp4, index = args
@@ -522,17 +543,39 @@ def Compute_spike_triggered_average(unit, channel, all_spikes, window, img_rate,
                 images_triggered_temp.extend(pool.map(Spike_averages_parallel_prespike_3sec, temp4))
 
             if True:
-                print "Removing average of all pre spike frames - (time: -", window, "sec .. 0sec)"
-                images_triggered_temp.extend(pool.map(Spike_averages_parallel_prespike_3sec_1D, temp4))
-                
-                print "... done... making 1D stack..."
-                stack_1D = vstack((images_triggered_temp))
-                print stack_1D.shape
+                #SLIDING WINDOW METHOD
+                if False: 
+                    print "Removing average of all pre spike frames - (time: -", window, "sec .. 0sec)"
+                    images_triggered_temp.extend(pool.map(Spike_averages_parallel_prespike_3sec_1D, temp4))
+                    
+                    print "... done... making 1D stack..."
+                    stack_1D = vstack((images_triggered_temp))
+                    print stack_1D.shape
 
-                np.save(stack_file_name, stack_1D)
-                pool.close()
-    
-                return 0, 0, 0 #Dummy return variables
+                    np.save(stack_file_name, stack_1D)
+                    pool.close()
+        
+                    return 0, 0, 0 #Dummy return variables
+                    
+                if True:    #Global average
+                    print "Removing average of all frames..."
+                    baseline = np.mean(images_temp, axis=0)
+
+                    vectors = []
+                    images_temp = (images_temp - baseline)/baseline #Normalize all data to DF/F using GSR 
+                    
+                    images_triggered_temp.extend(pool.map(Spike_averages_parallel_globalsignalregression_1D, temp4))
+
+                    print "... done... making 1D stack..."
+                    stack_1D = vstack((images_triggered_temp))
+                    print stack_1D.shape
+
+                    np.save(stack_file_name+"_globalsignalregression", stack_1D)
+                    pool.close()
+        
+                    return 0, 0, 0 #Dummy return variables
+                    
+                    
             
             pool.close()
             print "... done "
