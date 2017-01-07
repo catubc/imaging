@@ -544,7 +544,7 @@ def Compute_spike_triggered_average(unit, channel, all_spikes, window, img_rate,
 
             if True:
                 #SLIDING WINDOW METHOD
-                if False: 
+                if True: 
                     print "Removing average of all pre spike frames - (time: -", window, "sec .. 0sec)"
                     images_triggered_temp.extend(pool.map(Spike_averages_parallel_prespike_3sec_1D, temp4))
                     
@@ -557,7 +557,7 @@ def Compute_spike_triggered_average(unit, channel, all_spikes, window, img_rate,
         
                     return 0, 0, 0 #Dummy return variables
                     
-                if True:    #Global average
+                else:    #Global average
                     print "Removing average of all frames..."
                     baseline = np.mean(images_temp, axis=0)
 

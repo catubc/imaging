@@ -108,7 +108,7 @@ def dim_reduction(matrix_in, method, filename):
                 array_1D[k] = matrix_in[k].ravel()
             matrix_in = array_1D
 
-            Y, X = PCA(matrix_in, 3)
+            Y = PCA(matrix_in, 3)
 
             np.save(filename+'_PCA_'+str(np.array(matrix_in).shape[1])+'D', Y)
         else:
@@ -329,13 +329,14 @@ def Define_cortical_areas(file_name):
                 
         counter+=1
 
-def plot_data(data, colours, original_image, methods, method, n_clusters, labels, file_name, mid_line_mask, block, unit):
+def plot_data(data, colours, original_image, methods, method, n_clusters, labels, file_name, mid_line_mask, block, unit, random_spikes, subtract_random):
 
+    colours = colours[4:]
 
     print file_name
     filename= file_name
     path, file_name = os.path.split(file_name) 
-    if False:
+    if True:
         #***************************************************************************
         #PLot rasters
         ax = plt.subplot(111)
@@ -371,8 +372,8 @@ def plot_data(data, colours, original_image, methods, method, n_clusters, labels
         #*****************************************************************************
         #Plot ISI histograms
         for k in range(n_clusters):
-            ax = plt.subplot(1,n_clusters,k+1)
-            #ax = plt.subplot(2,2,k+1)
+            #ax = plt.subplot(1,n_clusters,k+1)
+            ax = plt.subplot(2,2,k+1)
             ax.yaxis.set_ticks([])
             indexes = np.where(labels==k)[0]
             temp_raster = spikes[indexes]
@@ -390,13 +391,14 @@ def plot_data(data, colours, original_image, methods, method, n_clusters, labels
         plt.show()
         
         #PLot all spikes ISI histogram
-        ax = plt.subplot(2,2,1)
-        isi = spikes[1:]-spikes[:-1]
-        bin_width = 0.005
-        y = np.histogram(isi, bins = np.arange(0,0.2,bin_width))
-        plt.bar(y[1][:-1], y[0], bin_width, color='black')        
-        plt.ylim(0,np.max(y[0]))
-        plt.show()
+        if True: 
+            ax = plt.subplot(2,2,1)
+            isi = spikes[1:]-spikes[:-1]
+            bin_width = 0.005
+            y = np.histogram(isi, bins = np.arange(0,0.2,bin_width))
+            plt.bar(y[1][:-1], y[0], bin_width, color='black')        
+            plt.ylim(0,np.max(y[0]))
+            plt.show()
         
         ##*************************************************************************************
         ##Plot partitioned rasters
@@ -429,7 +431,7 @@ def plot_data(data, colours, original_image, methods, method, n_clusters, labels
         
         #******************************************************************************
         #Plot Scatter Distributions
-        if False: 
+        if True: 
             fig = plt.figure()
             ax = fig.add_subplot(111)
 
@@ -439,7 +441,7 @@ def plot_data(data, colours, original_image, methods, method, n_clusters, labels
             plt.show()
             
 
-        if True: 
+        if False: 
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
 
@@ -464,6 +466,22 @@ def plot_data(data, colours, original_image, methods, method, n_clusters, labels
         
         #******************************************************************************
         #Plot motifs
+        if '2015-2-12' in filename: 
+            if unit == 5: random_stack_list = [2,1,0,3]
+            if unit == 10: random_stack_list = [3,2,1,0]
+            if unit == 15: random_stack_list = [1,0,3,2]
+            if unit == 33: random_stack_list = [1,2,0,3]
+            
+        if '2015-7-22-2' in filename:
+            if unit == 0: random_stack_list = [2,1,0,3]
+            if unit == 1: random_stack_list = [0,2,3,1]
+        
+        if '2015-11-27-5' in filename:
+            if unit ==12: random_stack_list = [1,0,2,3]
+        
+        print filename
+    
+        
         print "... plotting ..."
         for k in range(n_clusters):
             print "...cluster: ", k
@@ -479,6 +497,14 @@ def plot_data(data, colours, original_image, methods, method, n_clusters, labels
             for p in range(0, len(img_stack), block):
                 temp_stack.append(np.mean(img_stack[p:p+block], axis=0))
 
+            if random_spikes: 
+                np.save(path + '/random_cluster_template'+str(k), temp_stack)
+
+            else:
+                if subtract_random: 
+                    random_stack = np.load(path + '/random_cluster_template'+str(random_stack_list[k])+'.npy')
+                    temp_stack = np.array(temp_stack) - random_stack
+
             temp_stack = quick_mask_single_allframe(temp_stack, mid_line_mask)
             
             img_out = np.ma.hstack((temp_stack))
@@ -492,6 +518,7 @@ def plot_data(data, colours, original_image, methods, method, n_clusters, labels
             ax.get_yaxis().set_visible(False)
             
             ax.set_title("Cluster: "+colours[k]+" # Spks: "+str(len(indexes)) + " DF/F (max/min): " + str(round(v_max*100,1)) +"%", fontsize =30)
+
 
         #Add total average motif
         ax=plt.subplot(n_clusters+1, 1, n_clusters+1)
@@ -509,8 +536,10 @@ def plot_data(data, colours, original_image, methods, method, n_clusters, labels
         temp_stack = quick_mask_single_allframe(temp_stack, mid_line_mask)
         
         img_out = np.ma.hstack((temp_stack))
-        v_max = np.nanmax(np.abs(img_out)); v_min = -v_max
-
+        v_max = np.nanmax(np.abs(img_out))
+        if v_max <0.01: v_max = .01
+        v_min = -v_max
+        
         img_out[:, img_out.shape[1]/2-2:img_out.shape[1]/2+2] = -100
 
 
@@ -1034,7 +1063,7 @@ def hierarchical_clustering(base_filename, cells, methods, methods_array, colour
 
 
 
-def partition_data_roi(base_filename, cells, methods, methods_array, colours, area_names, sides, mid_line_mask, block, crop_method, unit, n_clusters, global_signal_regression):
+def partition_data_roi(base_filename, cells, methods, methods_array, colours, area_names, sides, mid_line_mask, block, crop_method, unit, n_clusters, global_signal_regression, random_spikes, subtract_random):
     
     c = unit
     print "... processing cell: ", c
@@ -1065,6 +1094,7 @@ def partition_data_roi(base_filename, cells, methods, methods_array, colours, ar
 
     fig = plt.figure()
 
+    #Print example single-spike motifs
     if True:
         for k in range(len(motifs)):
             print "...motif: ", motifs[k]
@@ -1092,6 +1122,7 @@ def partition_data_roi(base_filename, cells, methods, methods_array, colours, ar
             ax.get_yaxis().set_visible(False)
             
             ax.set_title("Spike #: "+str(motifs[k]) + " DF/F (max/min): " + str(round(v_max*100,1)) +"%", fontsize =30)
+        
     plt.suptitle(filename+"\nExample Single Spike Motifs", fontsize = 30)
     plt.show()
 
@@ -1113,6 +1144,7 @@ def partition_data_roi(base_filename, cells, methods, methods_array, colours, ar
             
             save_file = filename[:-4] + '_' + depth + "_" + area + "_" + side+"_roi"
             out_file = save_file+"_"+crop_method
+            print out_file
 
             if os.path.exists(out_file+'.npy')==False:
                 
@@ -1208,52 +1240,311 @@ def partition_data_roi(base_filename, cells, methods, methods_array, colours, ar
             np.random.shuffle(labels)
 
         if True: 
-            plot_data(data, colours, img_stack, methods, method, n_clusters, labels, filename, mid_line_mask, block, unit)
+            plot_data(data, colours, img_stack, methods, method, n_clusters, labels, filename, mid_line_mask, block, unit, random_spikes, subtract_random)
             
-             
-           
-def partition_data(base_filename, cells, methods, methods_array, colors):
-    
-    for c in cells: 
-        print "... processing cell: ", c
+          
 
+def find_neighbouring_motifs(base_filename, cells, methods, methods_array, colours, area_names, sides, mid_line_mask, block, crop_method, unit, n_clusters, global_signal_regression, random_spikes, subtract_random, depth):
+    
+    c = unit
+    print "... processing cell: ", c
+
+    if global_signal_regression==False: 
         filename = glob.glob(base_filename+str(c).zfill(2)+"*spikes.npy")
+    else: 
+        filename = glob.glob(base_filename+str(c).zfill(2)+"*spikes_globalsignalregression.npy")
+
+
+    if len(filename)!=1: 
+        print "...skipping cell: "
+        return
+
+    filename = filename[0]
+    
+    img_stack = np.load(filename, mmap_mode='c')
+    print img_stack.shape
+        
+    
+    #************************************************************************    
+    #Plot example motifs
+    if False:
+        motifs = [1]
+        motifs.append(int(len(img_stack)/5)*2+25)
+        motifs.append(int(len(img_stack)/5)*3-1)
+        motifs.append(int(len(img_stack)/5)*4-1)
+        motifs.append(int(len(img_stack)/5)*5-1)
+
+        fig = plt.figure()
+
+        #Print example single-spike motifs
+        if True:
+            for k in range(len(motifs)):
+                print "...motif: ", motifs[k]
+                ax=plt.subplot(5,1,k+1)
+                temp_ave = img_stack[motifs[k]]
+                
+                temp_stack = []
+                for p in range(temp_ave.shape[1]/64):
+                    temp_stack.append(temp_ave[:,p*64:(p+1)*64])
+                
+                out_stack = []
+                for p in range(0, len(temp_stack), block):
+                    out_stack.append(np.mean(temp_stack[p:p+block], axis=0))
+
+                temp_stack = quick_mask_single_allframe(out_stack, mid_line_mask)
+                
+                img_out = np.ma.hstack((temp_stack))
+                img_out[:, img_out.shape[1]/2-2:img_out.shape[1]/2+2] = np.min(img_out)
+                
+                v_max = np.nanmax(np.abs(img_out)); v_min = -v_max
+
+                plt.imshow(img_out, vmin=v_min, vmax=v_max)
+                
+                ax.get_xaxis().set_visible(False)
+                ax.get_yaxis().set_visible(False)
+                
+                ax.set_title("Spike #: "+str(motifs[k]) + " DF/F (max/min): " + str(round(v_max*100,1)) +"%", fontsize =30)
+            
+        plt.suptitle(filename+"\nExample Single Spike Motifs", fontsize = 30)
+        plt.show()
+
+
+    #************************************************************************
+    #Load vector for original data:
+    dir_path, file_name = os.path.split(filename) 
+    
+    #area_names = ['barrel','retrosplenial','visual','motor']
+    area_names = ['barrel','retrosplenial']
+    pre_t_points = 0
+    post_t_points = +15
+
+    
+    spike_list = np.random.randint(3000, size=10)
+    
+    for m in spike_list:
+        vector_stack = []
+        for ctr, area in enumerate(area_names):
+            for side in sides:
+                save_file = filename[:-4] + '_' + depth + "_" + area + "_" + side+"_roi"
+                out_file = save_file+"_"+crop_method
+
+                vector_stack.append(np.load(out_file+'.npy'))
+        
+        vector_stack = np.array(vector_stack)
+        vector_stack = np.swapaxes(vector_stack, 0, 1)
+        print vector_stack.shape
+        
+        all_stack = []
+        for p in range(len(vector_stack)):
+            all_stack.append([])
+            for r in range(len(vector_stack[p])):
+                #all_stack[p].extend(vector_stack[p][r])
+                #all_stack[p].extend(vector_stack[p][r][vector_stack.shape[2]/2:])
+                all_stack[p].extend(vector_stack[p][r][vector_stack.shape[2]/2-pre_t_points:vector_stack.shape[2]/2+post_t_points])
+                
+                #temp_mean = np.average(vector_stack[p][r][vector_stack.shape[2]/2:vector_stack.shape[2]/2+6], axis=0)
+                #all_stack[p].extend([temp_mean])
+        
+        data_out = np.array(all_stack)
+        print data_out.shape
+        
+        motif = data_out[m]
+
+        #****************************************************************************
+        #Load vectors for random data:
+        c = 59 #Random trigger is 59
+        
+        if global_signal_regression==False: 
+            filename = glob.glob(base_filename+str(c).zfill(2)+"*spikes.npy")
+        else: 
+            filename = glob.glob(base_filename+str(c).zfill(2)+"*spikes_globalsignalregression.npy")
+
         if len(filename)!=1: 
             print "...skipping cell: "
-            continue
+            return
 
         filename = filename[0]
-        for method in methods_array: 
-            path_name, file_name = os.path.split(filename)
-             
-            original_image = np.load(filename, mmap_mode='c')
+        
+        img_stack_random = np.load(filename, mmap_mode='c')
+        print img_stack_random.shape
+        
+        dir_path, file_name = os.path.split(filename) 
 
-            if original_image.shape[0] < 250: continue
+        vector_stack_random = []
+        for ctr, area in enumerate(area_names):
+            for side in sides:
+                save_file = filename[:-4] + '_' + depth + "_" + area + "_" + side+"_roi"
+                out_file = save_file+"_"+crop_method
+
+                vector_stack_random.append(np.load(out_file+'.npy'))
+        
+        vector_stack_random = np.array(vector_stack_random)
+        vector_stack_random = np.swapaxes(vector_stack_random, 0, 1)
+        print vector_stack_random.shape
+        
+        all_stack_random = []
+        for p in range(len(vector_stack_random)):
+            all_stack_random.append([])
+            for r in range(len(vector_stack_random[p])):
+                #all_stack[p].extend(vector_stack[p][r])
+                #all_stack[p].extend(vector_stack[p][r][vector_stack.shape[2]/2:])
+                all_stack[p].extend(vector_stack[p][r][vector_stack.shape[2]/2-pre_t_points:vector_stack.shape[2]/2+post_t_points])
+                
+                #temp_mean = np.average(vector_stack[p][r][vector_stack.shape[2]/2:vector_stack.shape[2]/2+6], axis=0)
+                #all_stack[p].extend([temp_mean])
+        
+        data_out_random = np.array(all_stack_random)
+        print data_out_random.shape
+        
+        #****************************************************************************
+        #Find nearest 10 motifs to the data out motif 
+        
+        dist = np.linalg.norm(data_out-motif, axis=1)
+        
+        print dist
+        sort_index = np.argsort(dist)
+        print sort_index
+        print len(dist)
+        print dist[sort_index]
+
+
+        #*****************************************************************************
+        #Print example single-spike motifs: close to selected motif
+        n_motifs = 25
+        img_out_total = []
+        for k in range(n_motifs-1):
+            #print "...motif: ", motifs[k]
+            print "...", k, "... distance: ", dist[sort_index[k]]
             
-            print "... # spikes: ", original_image.shape[0]
+            temp_ave = img_stack[sort_index[k]]
+            
+            temp_stack = []
+            for p in range(temp_ave.shape[1]/64):
+                temp_stack.append(temp_ave[:,p*64:(p+1)*64])
+            
+            out_stack = []
+            for p in range(0, len(temp_stack), block):
+                out_stack.append(np.mean(temp_stack[p:p+block], axis=0))
 
-            print "... dim reduction method: ", methods[method]
+            img_out_total.append(out_stack)
 
-            #array_1D = np.zeros(original_image.shape, dtype = np.float32)
-            #array_1D = np.zeros((len(original_image), 729088), dtype = np.float32)
-            #array_1D = np.zeros((len(original_image), 737280), dtype = np.float32)
-            #for k in range(len(original_image)):
-            #    array_1D[k] = original_image[k].ravel()
+            temp_stack = quick_mask_single_allframe(out_stack, mid_line_mask)
+            
+            img_out = np.ma.hstack((temp_stack))
+            img_out[:, img_out.shape[1]/2-2:img_out.shape[1]/2+2] = np.min(img_out)
+            
+            v_max = np.nanmax(np.abs(img_out)); v_min = -v_max
+            
+            #ax=plt.subplot(n_motifs,1,k+1)
+            #plt.imshow(img_out, vmin=v_min, vmax=v_max)
+            #ax.get_xaxis().set_visible(False)
+            #ax.get_yaxis().set_visible(False)
+            
+            #ax.set_title("Spike #: "+ str(k) + " DF/F (max/min): " + str(round(v_max*100,1)) +"%", fontsize =30)
 
-            #data = dim_reduction(original_image, method, filename)
-            data = dim_reduction(original_image[:,:, original_image.shape[2]/2:], method, filename+"_half_stack")
-            #data = dim_reduction(original_image[:,:, original_image.shape[2]/2:original_image.shape[2]/2+64*30], method, filename+"_1sec_stack")
+        #**********************************
+        #Plot average of nearby motifs
+        ax=plt.subplot(3,1,1)
 
-            n_clusters = 4
+        out_stack = np.mean(img_out_total, axis=0)
 
-            labels = KMEANS(data, n_clusters)
+        temp_stack = quick_mask_single_allframe(out_stack, mid_line_mask)
+        
+        img_out = np.ma.hstack((temp_stack))
+        img_out[:, img_out.shape[1]/2-2:img_out.shape[1]/2+2] = np.min(img_out)
+        
+        v_max = np.nanmax(np.abs(img_out)); v_min = -v_max
+        
+        plt.imshow(img_out, vmin=v_min, vmax=v_max)
+        
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+        
+        ax.set_title(" DF/F (max/min): " + str(round(v_max*100,1)) +"%", fontsize =30)
 
-            if plotting: 
-                plot_data(data, colours, original_image, methods, method, mid_line_mask)
-                
-                
-                
-                
+        img_out_saved =img_out
+        v_max_saved = v_max
+
+        #****************** Plot original data 
+        ax=plt.subplot(3,1,2)
+        temp_ave = img_stack[1]
+        
+        temp_stack = []
+        for p in range(temp_ave.shape[1]/64):
+            temp_stack.append(temp_ave[:,p*64:(p+1)*64])
+        
+        out_stack = []
+        for p in range(0, len(temp_stack), block):
+            out_stack.append(np.mean(temp_stack[p:p+block], axis=0))
+
+        temp_stack = quick_mask_single_allframe(out_stack, mid_line_mask)
+        
+        img_out = np.ma.hstack((temp_stack))
+        img_out[:, img_out.shape[1]/2-2:img_out.shape[1]/2+2] = np.min(img_out)
+        
+        v_max = np.nanmax(np.abs(img_out)); v_min = -v_max
+
+        plt.imshow(img_out, vmin=v_min, vmax=v_max)
+        
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+        ax.set_title(" DF/F (max/min): " + str(round(v_max*100,1)) +"%", fontsize =30)
+        
+
+        #***********************Plot difference
+        ax=plt.subplot(3,1,3)
+        
+        img_out = img_out/v_max - img_out_saved/v_max_saved
+        
+        v_max = np.nanmax(np.abs(img_out)); v_min = -v_max
+
+        plt.imshow(img_out, vmin=v_min, vmax=v_max)
+        
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+        ax.set_title(" DF/F (max/min): " + str(round(v_max*100,1)) +"%", fontsize =30)
+
+        plt.suptitle(filename+"\nExample Single Spike Motifs", fontsize = 30)
+        plt.show()
+
+    
+    quit()
+           
+    #ROI Dimension Reduction
+    for method in methods_array: 
+        path_name, file_name = os.path.split(filename)
+         
+        #data = dim_reduction(original_image, method, filename)
+
+        data = dim_reduction(data_out, method, filename+"_roi_dimreduction")
+
+        #n_clusters = 4
+
+        #Clustering Step
+        labels = KMEANS(data, n_clusters)
+        
+        #Plot Traces Being Clustered
+        if False: 
+            ave_traces = []
+            for k in range(4): ave_traces.append([])
+            for k in range(len(data_out)):
+                #plt.plot(np.hstack(np.swapaxes(vector_stack[k], 0, 1)), color=colours[labels[k]], alpha=0.3)
+                plt.plot(data_out[k], color = colours[labels[k]], alpha =0.1)
+                ave_traces[labels[k]].append(data_out[k])
+            
+            for k in range(4):
+                plt.plot(np.mean(ave_traces[k], axis=0), color=colours[k], linewidth=3)
+            plt.show()
+            
+        #Test by randomizing labels
+        if False:
+            np.random.shuffle(labels)
+
+        if True: 
+            plot_data(data, colours, img_stack, methods, method, n_clusters, labels, filename, mid_line_mask, block, unit, random_spikes, subtract_random)
+            
+             
+             
 #********************************
 
 colours = ['green','red','blue', 'magenta','purple','orange','cyan','pink','grey', 'orange','green','red','blue', 'magenta','purple','orange','cyan','pink','grey', 'orange','green','red','blue', 'magenta','purple','orange','cyan','pink','grey', 'orange']
@@ -1277,51 +1568,55 @@ base_filename = '/media/cat/8TB/in_vivo/tim/dongsheng/2015-12-2/2015-12-2-15-all
 #filename = '/media/cat/8TB/in_vivo/tim/dongsheng/2015-12-2/2015-12-2-6-10electrodeincortex-iso0/stack1D_2015-12-2-6-10electrodeincortex-iso0_unit09_ch14_all_3sec_window_01728_spikes.npy'
 #filename = '/media/cat/8TB/in_vivo/tim/dongsheng/2015-12-2/2015-12-2-6-10electrodeincortex-iso0/stack1D_2015-12-2-6-10electrodeincortex-iso0_unit08_ch14_all_3sec_window_01886_spikes.npy'
 
+
    
 #area_names = ['limb', 'barrel','retrosplenial','visual', 'motor'] 
-area_names = ['barrel', 'retrosplenial', 'motor'] 
+area_names = ['barrel', 'retrosplenial', 'motor', 'visual'] 
 sides = ['left']#,'right']
 crop_method = 'ave'  #,['max','ave']
+depth = 'cortex'
+
+
+methods = ['MDS - SMACOF', 't-SNE', 'PCA', 'tSNE-Barnes_hut']
+methods_array = np.arange(0,3,1)
+methods_array = [2]
+
 
 global_signal_regression = False
 
 trace_mode = 'ave'
 
-mid_line_mask = 2
+mid_line_mask = 5
 block = 10 #30Hz recs
-#block = 15 #50Hz recs
+if '11-27-5' in base_filename: block = 15 #50Hz recs
 
-n_clusters = 15
+n_clusters = 4
         
 cells = np.arange(0,100,1)
-#unit = 1 #7-22-2
+#unit = 0 #7-22-2    #7 is random trigger;  cells: 1
 #unit = 16 #7-22-5
 #unit = 4 #12-2-6; cells: 7, 12, 8, 9, 13, 4, 5
 #unit = 2 #11-8-9
-#unit = 12 #11-27-5
-unit = 33 #2015-12-15
+#unit = 12 #11-27-5      #Random trigger: 15; cells: 12
+unit = 33 #2015-12-2-15     #59 is random trigger; #5, 10, 15, 33 are cells
 #unit = 65 #12-2-12
 #unit = 2 #12-11-12
 
-methods = ['MDS - SMACOF', 't-SNE', 'PCA', 'tSNE-Barnes_hut']
-methods_array = np.arange(0,3,1)
-methods_array = [1]
+
+random_spikes = False
+subtract_random = False
+
+#**********************************************
+Define_cortical_areas(base_filename)
+
+#partition_data_roi(base_filename, cells, methods, methods_array, colours, area_names, sides, mid_line_mask, block, crop_method, unit, n_clusters, global_signal_regression, random_spikes, subtract_random)
+
+find_neighbouring_motifs(base_filename, cells, methods, methods_array, colours, area_names, sides, mid_line_mask, block, crop_method, unit, n_clusters, global_signal_regression, random_spikes, subtract_random, depth)
 
 
-temp_name = glob.glob(base_filename+str(unit).zfill(2)+"*spikes.npy")
-filename = temp_name[0]
+#track_roi_cell(base_filename, cells, methods, methods_array, colours, area_names, sides, mid_line_mask, block, crop_method, unit, n_clusters, trace_mode)
 
-
-Define_cortical_areas(filename)
-
-
-#partition_data(base_filename, cells, methods, methods_array, colors)
-
-partition_data_roi(base_filename, cells, methods, methods_array, colours, area_names, sides, mid_line_mask, block, crop_method, unit, n_clusters, global_signal_regression)
-
-track_roi_cell(base_filename, cells, methods, methods_array, colours, area_names, sides, mid_line_mask, block, crop_method, unit, n_clusters, trace_mode)
-
-hierarchical_clustering(base_filename, cells, methods, methods_array, colours, area_names, sides, mid_line_mask, block, crop_method, unit, n_clusters, trace_mode)
+#hierarchical_clustering(base_filename, cells, methods, methods_array, colours, area_names, sides, mid_line_mask, block, crop_method, unit, n_clusters, trace_mode)
 
 quit()
 
