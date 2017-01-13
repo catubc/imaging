@@ -179,8 +179,8 @@ file_names = []
 ###'2015-12-1-23-allelectrodeinthalamus-iso0_lfp', 
 #])
 
-#file_dirs.append('/media/cat/8TB/in_vivo/tim/dongsheng/2015-12-2/') #*************************************
-#file_names.append([
+file_dirs.append('/media/cat/8TB/in_vivo/tim/dongsheng/2015-12-2/') #*************************************
+file_names.append([
 #'2015-12-2-2-10electrodeincortex-iso1', 
 #'2015-12-2-3-10electrodeincortex-iso1',
 #'2015-12-2-4-10electrodeincortex-iso1',
@@ -189,22 +189,22 @@ file_names = []
 #'2015-12-2-9-allelectrodeincortex-iso1',  #SINGLE
 #'2015-12-2-11-allelectrodeinthalamus-iso1',
 #'2015-12-2-12-allelectrodeinthalamus-iso1',
-#'2015-12-2-14-allelectrodeinthalamus-is0',
+'2015-12-2-14-allelectrodeinthalamus-is0',
 #'2015-12-2-15-allelectrodeinthalamus-is0',
 
 ##'2015-12-2-3-10electrodeincortex-iso1_mua',
 ##'2015-12-2-6-10electrodeincortex-iso0_mua',
 ##'2015-12-2-12-allelectrodeinthalamus-iso1_mua',
-#'2015-12-2-14-allelectrodeinthalamus-is0_mua',
+##'2015-12-2-14-allelectrodeinthalamus-is0_mua',
 
 ##'2015-12-2-3-10electrodeincortex-iso1_lfp',
 ##'2015-12-2-6-10electrodeincortex-iso0_lfp',
 ##'2015-12-2-12-allelectrodeinthalamus-iso1_lfp',
 #'2015-12-2-14-allelectrodeinthalamus-is0_lfp'
-#])
+])
 
-file_dirs.append('/media/cat/8TB/in_vivo/tim/dongsheng/2015-12-11/') #*************************************
-file_names.append([
+#file_dirs.append('/media/cat/8TB/in_vivo/tim/dongsheng/2015-12-11/') #*************************************
+#file_names.append([
 #'2015-12-11-1-10electincortex-iso1.0',
 #'2015-12-11-2-10electincortex-iso1',
 #'2015-12-11-3-10electincortex-iso1',
@@ -214,7 +214,7 @@ file_names.append([
 #'2015-12-11-9-allelectincortex',
 #'2015-12-11-10-5electinthalamusorcpu',
 #'2015-12-11-11-allelectinthalamus-iso1',
-'2015-12-11-12-allelectinthalamus-iso1',
+#'2015-12-11-12-allelectinthalamus-iso1',
 #'2015-12-11-13-allelectinthalamus-iso1',
 #'2015-12-11-15-allelectinthalamus-iso0',
 #'2015-12-11-16-allelectinthalamus-iso0',
@@ -230,7 +230,7 @@ file_names.append([
 #'2015-12-11-5-10electincortex-iso0_lfp',
 ##'2015-12-11-12-allelectinthalamus-iso1_lfp',
 #'2015-12-11-16-allelectinthalamus-iso0_lfp',
-])
+#])
 
 #file_dirs.append('/media/cat/8TB/in_vivo/tim/dongsheng/2015-12-16/') #*************************************
 #file_names.append([
@@ -293,7 +293,7 @@ area_names = ['hindlimb', 'forelimb', 'barrel','retrosplenial','visual', 'motor'
 
 sides = ['left','right']
 
-stm_types = ["all"]  # ["all", "burst", "1sec"]    #Do "all" last to ensure that the time courses are saved also
+stm_types = ["modes"] #, ["all", "burst", "1sec"]    #Do "all" last to ensure that the time courses are saved also
 
 #area_names = [ 'area1']
 #sides = ['left']
@@ -303,6 +303,7 @@ sta_maps = True
 overwrite = True                   #Compute stimulus maps 
 overwrite_time_courses = False      #Flag to bipass existing img_avg generation and just compute time courses
 overwrite_shifted=False             #Flag for overwriting rotated/shifted .npy image files
+
 
 #Stimulus maps: define cortical areas using stimulus recordings
 stimulus_maps = False
@@ -357,12 +358,15 @@ for file_dir in file_dirs:
         #Load units from .csv file name; NB: This may lead to duplication as resaved .csv's for Dongsheng
         files = os.listdir(file_dir+file_name)
         temp_names = []
+        #for file_ in files:
+            #if ("unit_" in file_):
+            #    if ('map' in file_) or ('npy' in file_) or ('png' in file_) or ('parcel' in file_):
+            #        pass
+            #    else:
+            #        temp_names.append(file_)
         for file_ in files:
-            if ("unit_" in file_):
-                if ('map' in file_) or ('npy' in file_) or ('png' in file_) or ('parcel' in file_):
-                    pass
-                else:
-                    temp_names.append(file_)
+            if (file_[:5]=="unit_") and (".csv" in file_): temp_names.append(file_)
+        
 
         #Save individual unit names, channels, ptps
         units = []
@@ -481,11 +485,12 @@ for file_dir in file_dirs:
                 ptp=ptps[i]
                 
                 #PICK A SINGLE UNIT TO LOOK AT
-                if unit not in [49]: continue
+                if unit not in [16]: continue         #cells: 4, 14, 27, 33, 
+                random_flag = False  #Set this flag to compute random STMS for every single frame for spontaneous motifs 
                 
                 #*********** Load sorted spikes for unit
                 spikes = np.loadtxt(file_dir+file_name+'/unit_'+str(unit).zfill(2)+ '_channel_' + str(channel).zfill(2) + '_ptp_'+str(ptp).zfill(3)+'.csv')
-
+                
                 #Determine if any spikes in recording window to continue:
                 temp0 = np.where(np.logical_and(spikes>=img_times[0]+window, spikes<=img_times[-1]-window))[0]
                 spikes_in_window = spikes[temp0]
@@ -501,7 +506,7 @@ for file_dir in file_dirs:
 
                 #*********** Compute spike triggered averages and remove baseline
                 images_processed, spikes, plot_string = Compute_spike_triggered_average(unit, channel, spikes, window, img_rate, img_times, n_pixels, 
-                                                            images_aligned, file_dir, file_name, n_procs, overwrite, stm_types)
+                                                            images_aligned, file_dir, file_name, n_procs, overwrite, stm_types, random_flag)
 
                 #*********** Compute spike-triggered maps on luminance-constrast feature map
                 #if False:

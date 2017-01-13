@@ -335,7 +335,7 @@ def Spike_averages_parallel_prespike_2sec((args)):
 
 def Spike_averages_parallel_prespike_3sec((args)):
     global images_temp, temp_n_pixels
-
+      
     temp3 = args
 
     sum_images = np.zeros((len(temp3[0]),temp_n_pixels,temp_n_pixels), dtype=np.float32)
@@ -357,9 +357,9 @@ def Spike_averages_parallel_prespike_3sec_1D((args)):
 
     #sum_images = np.zeros((len(temp3[0]), temp_n_pixels, temp_n_pixels), dtype=np.float32)
     #vectors = np.zeros((len(temp3), 11665408), dtype=np.float32)
-    vectors = np.zeros((len(temp3), 64, 11392), dtype=np.float32) #Later recordings sampling rates have 178 frames per 6 seconds
+    #vectors = np.zeros((len(temp3), 64, 11392), dtype=np.float32) #Later recordings sampling rates have 178 frames per 6 seconds
     #vectors = np.zeros((len(temp3), 64, 11520), dtype=np.float32) #older recordings
-    #vectors = np.zeros((len(temp3), 64, 19072), dtype=np.float32) #50Hz recs
+    vectors = np.zeros((len(temp3), 64, 19072), dtype=np.float32) #50Hz recs
     
     for i in range(0, len(temp3), 1):
         baseline = np.average(images_temp[temp3[i][0:len(temp3[i])/2]], axis=0) 
@@ -367,7 +367,8 @@ def Spike_averages_parallel_prespike_3sec_1D((args)):
         temp_frame = (temp_img - baseline)/baseline
         
         #sum_images += temp_frame
-        temp_stack = np.ma.hstack(temp_frame)
+        #temp_stack = np.ma.hstack(temp_frame)
+        temp_stack = np.hstack(temp_frame)
         indexes = np.isnan(temp_stack)
         temp_stack[indexes]=0
 
@@ -416,7 +417,7 @@ def Sum_list((temp_list)):
         temp_sum += temp_list[i]
     return temp_sum
     
-def Compute_spike_triggered_average(unit, channel, all_spikes, window, img_rate, img_times, n_pixels, images_raw, file_dir, file_name, n_procs, overwrite, stm_types):
+def Compute_spike_triggered_average(unit, channel, all_spikes, window, img_rate, img_times, n_pixels, images_raw, file_dir, file_name, n_procs, overwrite, stm_types, random_flag):
     '''Computes average frame values from t=-window .. +window (usually 180 to 270 frames) '''
     
     global images_temp, temp_window, temp_img_rate, temp_n_pixels
@@ -435,9 +436,9 @@ def Compute_spike_triggered_average(unit, channel, all_spikes, window, img_rate,
     #Save only spikes that are within imaging window:
     filename_spikes = file_dir+file_name+'/unit_'+str(unit).zfill(2)+ '_channel_' + str(channel).zfill(2) + '*.csv'
     file_out = glob.glob(filename_spikes)[0]
-    if os.path.exists(file_out[:-4]+"_imagingspikes.txt")==False: 
-        np.savetxt(file_out[:-4]+"_imagingspikes.txt", all_spikes)       #Save only the spikes within imaging window
-        #return [],[],[] 
+    #if os.path.exists(file_out[:-4]+"_imagingspikes.txt")==False: 
+    np.savetxt(file_out[:-4]+"_imagingspikes.txt", all_spikes)       #Save only the spikes within imaging window
+    #return [],[],[] 
     
     #all_spikes = True
     #plot_string = 'all'     #Trigger off all spkes
@@ -447,6 +448,7 @@ def Compute_spike_triggered_average(unit, channel, all_spikes, window, img_rate,
     if len(all_spikes)==0:
         return images_raw, spikes, stm_type
 
+    #stm_types = ["burst"]  # ["all", "burst", "1sec"]    #Do "all" last to ensure that the time courses are saved also
     for stm_type in stm_types: 
         spikes = all_spikes
         
@@ -467,12 +469,12 @@ def Compute_spike_triggered_average(unit, channel, all_spikes, window, img_rate,
             #    #baseline = np.mean(images_temp, axis=0, dtype=np.float32)
             #    images_temp = (images_temp - baseline)/baseline
             #else: print "Not removing baseline"
-
+            
             #Use allspikes
             if stm_type =='all':
                 #Use all spikes
                 print "# Spikes ", len(spikes)
-                
+
                 temp3 = []
                 for i in spikes:        #temp3 contains all the frame indexes from img_times for each spike in raster; e.g. 180 frames for each spike automatically aligned
                     temp3.append(np.where(np.logical_and(img_times>=i-window, img_times<=i+window))[0][0:2*int(window*img_rate)]) #Fixed this value or could be off +/-1 frame
@@ -504,45 +506,130 @@ def Compute_spike_triggered_average(unit, channel, all_spikes, window, img_rate,
                         counter+=1
                 print "# Spikes beginning of bursts: ", counter
                 spikes = temp5
-
+                
                 temp3 = []
                 for i in spikes:
                     temp3.append(np.where(np.logical_and(img_times>=i-window, img_times<=i+window))[0][0:2*int(window*img_rate)])
-
-
-            #Compute all frames based on image index;
-            print "Computing images from spike averages in parallel for window: ", window, " secs ..."
-            images_triggered_temp=[]
-            temp4 = []  #Contains only first spikes from bursts in cell
-
-            if len(spikes) < 30:
-                pool = mp.Pool(1)
-                temp4.append(temp3)            
-            else:
+                       
+            
+            #IF COMPUTING RANDOM/NOISE Flag
+            if random_flag:
+                print "... computing all motifs..."
+                temp3 = []
+                clipped_img_times = img_times[180:-90]  #For 30Hz rates make sure 3sec+3sec at beginning and 3sec at end
+                for i in clipped_img_times:        #temp3 contains all the frame indexes from img_times for each spike in raster; e.g. 180 frames for each spike automatically aligned
+                    temp3.append(np.where(np.logical_and(img_times>=i-window, img_times<=i+window))[0][0:2*int(window*img_rate)]) #Fixed this value or could be off +/-1 frame
+            
+                print "...# random motifs: ", len(temp3)
                 
-                #n_procs = 1
-                pool = mp.Pool(n_procs)
-                chunks = int(len(spikes)/n_procs) #Break up the temp3 array into n_procs that are "chunk" long each
-                for i in range(n_procs):
-                    temp4.append(temp3[i*chunks: (i+1)*chunks])
-                    
-                #DISCARD RESIDUE: May wish to recapture this eventually.
-                #if n_procs*chunks<len(spikes):
-                #    temp_sum = images_temp[temp3[n_procs*chunks]]
-                #    for i in range(n_procs*chunks+1,len(spikes),1):
-                #        temp_sum+=images_temp[temp3[i]]
-                #    images_triggered_temp.append(temp_sum)
-           
-            if False:
-                indices = np.arange(len(spikes))
-                print "Removing average of 2sec - (time: -3sec .. -1sec)"
-                images_triggered_temp.extend(pool.map(Spike_averages_parallel_prespike_2sec, zip(temp4,indices)))
-                
-            if False:
-                print "Removing average of all pre spike frames - (time: -", window, "sec .. 0sec)"
-                images_triggered_temp.extend(pool.map(Spike_averages_parallel_prespike_3sec, temp4))
+                np.savetxt(file_out[:-4]+"_imagingspikes.txt", clipped_img_times)       #Save only the spikes within imaging window
+                #quit()
 
+            
+            #***************************************************************
+            #GENERATE ONLY AVERAGE MOTIFS
             if True:
+                #Use allspikes
+                spiking_modes = ['burst', 'last', 'tonic', 'first']
+                if stm_type =='modes':      
+                    mode_spikes = []
+                    print file_out[:-4]+"_imagingspikes_grouped_spikes.txt"
+                    with open(file_out[:-4]+"_imagingspikes_grouped_spikes.txt", 'rt') as inputfile:
+                        reader = csv.reader(inputfile)
+                        for row in reader:
+                            mode_spikes.append(np.float32(row))
+                            
+                    #Load spiking modes from disk
+                    for m in range(len(mode_spikes)): 
+                        temp3 = []
+                        for i in mode_spikes[m]:        #temp3 contains all the frame indexes from img_times for each spike in raster; e.g. 180 frames for each spike automatically aligned
+                            temp3.append(np.where(np.logical_and(img_times>=i-window, img_times<=i+window))[0][0:2*int(window*img_rate)]) #Fixed this value or could be off +/-1 frame
+                
+                        #Initialize list to capture data and store frame sequences;  Make MP Pool for spiking mode
+                        print "... computing spiking mode: ", spiking_modes[m], "  #spikes: ", len(mode_spikes[m])
+                        images_triggered_temp=[]
+                        temp4 = []  #Contains only first spikes from bursts in cell
+                        
+                        pool = mp.Pool(n_procs)
+                        chunks = int(len(mode_spikes[m])/n_procs) #Break up the temp3 array into n_procs that are "chunk" long each
+                        for i in range(n_procs):
+                            temp4.append(temp3[i*chunks: (i+1)*chunks])
+
+                        print "Removing average of all pre spike frames - (time: -", window, "sec .. 0sec)"
+                        images_triggered_temp.extend(pool.map(Spike_averages_parallel_prespike_3sec, temp4))
+                        
+                        pool.close()
+                        print "... done "
+
+                        #Computing averages spikes
+                        print "Summing Number of chunks: ", len(images_triggered_temp)
+
+                        temp_images = np.zeros((int(window*img_rate)*2, n_pixels, n_pixels), dtype=np.float16)
+                        for i in range(len(images_triggered_temp)):
+                            temp_images += images_triggered_temp[i]
+                        
+                        #DIVIDE BY NUMBER OF CHUNKS; Note used to be divided by number of spikes; also residue is being thrown out...
+                        images_processed = temp_images/float(len(images_triggered_temp))
+
+                        npy_file_name = file_dir + file_name + '/img_avg_' + file_name+ '_unit'+str(unit).zfill(2)+'_ch'+str(channel).zfill(2)+'_'+ \
+                                        stm_type+'_'+str(window)+'sec_window_'+str(len(spikes)).zfill(5)+"_spikes_"+spiking_modes[m]
+
+                        np.save(npy_file_name, images_processed)
+                                
+                else: 
+                    #Compute all frames based on image index;
+                    print "Computing images from spike averages in parallel for window: ", window, " secs ..."
+                    images_triggered_temp=[]
+                    temp4 = []  #Contains only first spikes from bursts in cell
+
+                    if len(spikes) < 30:
+                        pool = mp.Pool(1)
+                        temp4.append(temp3)            
+                    else:
+                        
+                        #n_procs = 1
+                        pool = mp.Pool(n_procs)
+                        chunks = int(len(spikes)/n_procs) #Break up the temp3 array into n_procs that are "chunk" long each
+                        for i in range(n_procs):
+                            temp4.append(temp3[i*chunks: (i+1)*chunks])
+                            
+                        #DISCARD RESIDUE: May wish to recapture this eventually.
+                        #if n_procs*chunks<len(spikes):
+                        #    temp_sum = images_temp[temp3[n_procs*chunks]]
+                        #    for i in range(n_procs*chunks+1,len(spikes),1):
+                        #        temp_sum+=images_temp[temp3[i]]
+                        #    images_triggered_temp.append(temp_sum)
+                        
+                    if True:
+                        print "Removing average of all pre spike frames - (time: -", window, "sec .. 0sec)"
+                        images_triggered_temp.extend(pool.map(Spike_averages_parallel_prespike_3sec, temp4))
+
+                    if False:
+                        indices = np.arange(len(spikes))
+                        print "Removing average of 2sec - (time: -3sec .. -1sec)"
+                        images_triggered_temp.extend(pool.map(Spike_averages_parallel_prespike_2sec, zip(temp4,indices)))
+                    
+                    pool.close()
+                    print "... done "
+
+                    #Sum over all spikes
+                    print "Summing Number of chunks: ", len(images_triggered_temp)
+
+                    temp_images = np.zeros((int(window*img_rate)*2, n_pixels, n_pixels), dtype=np.float16)
+                    for i in range(len(images_triggered_temp)):
+                        temp_images += images_triggered_temp[i]
+                    
+                    #DIVIDE BY NUMBER OF CHUNKS; Note used to be divided by number of spikes; also residue is being thrown out...
+                    images_processed = temp_images/float(len(images_triggered_temp))
+
+                    npy_file_name = file_dir + file_name + '/img_avg_' + file_name+ '_unit'+str(unit).zfill(2)+'_ch'+str(channel).zfill(2)+'_'+stm_type+'_'+str(window)+'sec_window_'+str(len(spikes)).zfill(5)+"_spikes"
+
+                    np.save(npy_file_name, images_processed)
+
+
+            #**********************************************************
+            #SAVE ALL SINGLE SPIKE MOTIFS 
+            if False:
                 #SLIDING WINDOW METHOD
                 if True: 
                     print "Removing average of all pre spike frames - (time: -", window, "sec .. 0sec)"
@@ -574,26 +661,7 @@ def Compute_spike_triggered_average(unit, channel, all_spikes, window, img_rate,
                     pool.close()
         
                     return 0, 0, 0 #Dummy return variables
-                    
-                    
-            
-            pool.close()
-            print "... done "
-
-            #Sum over all spikes
-            print "Summing Number of chunks: ", len(images_triggered_temp)
-
-            temp_images = np.zeros((int(window*img_rate)*2, n_pixels, n_pixels), dtype=np.float16)
-            for i in range(len(images_triggered_temp)):
-                temp_images += images_triggered_temp[i]
-            
-            #DIVIDE BY NUMBER OF CHUNKS; Note used to be divided by number of spikes; also residue is being thrown out...
-            images_processed = temp_images/float(len(images_triggered_temp))
-
-            npy_file_name = file_dir + file_name + '/img_avg_' + file_name+ '_unit'+str(unit).zfill(2)+'_ch'+str(channel).zfill(2)+'_'+stm_type+'_'+str(window)+'sec_window_'+str(len(spikes)).zfill(5)+"_spikes"
-
-            np.save(npy_file_name, images_processed)
-
+                  
         else: 
             print "Skipping processing of images ... loading from file"
             images_processed = np.load(npy_file_name+'.npy')
